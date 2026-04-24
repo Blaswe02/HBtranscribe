@@ -11,11 +11,21 @@ export interface TranscriptionOptions {
   showSpeakerLabels: boolean;
 }
 
+const MAX_CACHE_SIZE = 50;
+
 // Simple cache for deduplication
 let requestCache = new Map<string, Promise<TranscriptionResult>>();
 
 export const clearCache = () => {
   requestCache.clear();
+};
+
+const addToCache = (key: string, value: Promise<TranscriptionResult>) => {
+  if (requestCache.size >= MAX_CACHE_SIZE) {
+    // Evict oldest entry
+    requestCache.delete(requestCache.keys().next().value!);
+  }
+  requestCache.set(key, value);
 };
 
 const TRANSCRIPTION_SCHEMA: Schema = {
@@ -368,7 +378,7 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
     throw new Error(mapError(err));
   });
 
-  requestCache.set(hash, task);
+  addToCache(hash, task);
   return task;
 };
 
@@ -515,6 +525,6 @@ export const generateView = async (
   }, 2, signal, onRetry);
 
   // Store in cache as a pseudo-TranscriptionResult for compatibility with the existing cache map
-  requestCache.set(cacheKey, task.then(text => ({ [type]: text } as any)));
+  addToCache(cacheKey, task.then(text => ({ [type]: text } as any)));
   return task;
 };

@@ -23,6 +23,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
 
@@ -34,36 +35,30 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
   // Lazy generation
   useEffect(() => {
     const generateIfNeeded = async () => {
-      if (activeTab === 'minutes' && !result.minutes) {
-        setIsGenerating(true);
-        try {
+      const needsGeneration =
+        (activeTab === 'minutes' && !result.minutes) ||
+        (activeTab === 'actionPoints' && !result.actionPoints) ||
+        (activeTab === 'shortSummary' && !result.shortSummary);
+
+      if (!needsGeneration) return;
+
+      setIsGenerating(true);
+      setGenerationError(null);
+      try {
+        if (activeTab === 'minutes') {
           const minutes = await generateView('minutes', result.transcript);
           setResult(prev => ({ ...prev, minutes }));
-        } catch (err) {
-          console.error("Failed to generate minutes:", err);
-        } finally {
-          setIsGenerating(false);
-        }
-      } else if (activeTab === 'actionPoints' && !result.actionPoints) {
-        setIsGenerating(true);
-        try {
+        } else if (activeTab === 'actionPoints') {
           const actionPoints = await generateView('actionPoints', result.transcript);
           setResult(prev => ({ ...prev, actionPoints }));
-        } catch (err) {
-          console.error("Failed to generate action points:", err);
-        } finally {
-          setIsGenerating(false);
-        }
-      } else if (activeTab === 'shortSummary' && !result.shortSummary) {
-        setIsGenerating(true);
-        try {
+        } else if (activeTab === 'shortSummary') {
           const shortSummary = await generateView('shortSummary', result.transcript);
           setResult(prev => ({ ...prev, shortSummary }));
-        } catch (err) {
-          console.error("Failed to generate short summary:", err);
-        } finally {
-          setIsGenerating(false);
         }
+      } catch (err: any) {
+        setGenerationError(err?.message ?? "Genereren mislukt. Probeer het opnieuw.");
+      } finally {
+        setIsGenerating(false);
       }
     };
 
@@ -176,18 +171,22 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
         const startTime = parseTime(timeMatch[1]);
         // Estimate end time as 5 seconds later or next line's start time
         let endTime = '00:00:00,000';
+        const addFiveSeconds = (srtTime: string) => {
+          const [, m, s] = srtTime.split(':').map(p => parseInt(p));
+          const totalSecs = m * 60 + s + 5;
+          const mm = Math.floor(totalSecs / 60).toString().padStart(2, '0');
+          const ss = (totalSecs % 60).toString().padStart(2, '0');
+          return `00:${mm}:${ss},000`;
+        };
         if (i < lines.length - 1) {
           const nextMatch = lines[i+1].match(/^\[(\d{1,2}:\d{2})\]/);
           if (nextMatch) {
             endTime = parseTime(nextMatch[1]);
           } else {
-            // Fallback: add 5 seconds
-            const [h, m, s] = startTime.split(':').map(p => parseInt(p));
-            endTime = `00:${m.toString().padStart(2, '0')}:${(s + 5).toString().padStart(2, '0')},000`;
+            endTime = addFiveSeconds(startTime);
           }
         } else {
-          const [h, m, s] = startTime.split(':').map(p => parseInt(p));
-          endTime = `00:${m.toString().padStart(2, '0')}:${(s + 5).toString().padStart(2, '0')},000`;
+          endTime = addFiveSeconds(startTime);
         }
 
         const text = line.replace(/^\[\d{1,2}:\d{2}\]\s*/, '');
@@ -390,6 +389,17 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
             <RefreshCw className="w-10 h-10 text-blue-500 animate-spin mb-4" />
             <p className="text-slate-600 font-medium">AI analyseert de transcriptie...</p>
             <p className="text-slate-400 text-sm">Dit kan enkele seconden duren.</p>
+          </div>
+        ) : generationError ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-10 px-8">
+            <p className="text-red-600 font-medium text-center mb-2">Genereren mislukt</p>
+            <p className="text-slate-500 text-sm text-center mb-4">{generationError}</p>
+            <button
+              onClick={() => { setGenerationError(null); setResult(prev => ({ ...prev, [activeTab]: undefined as any })); }}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              Opnieuw proberen
+            </button>
           </div>
         ) : null}
 

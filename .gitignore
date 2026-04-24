@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local config with API keys — do NOT commit
+metadata.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

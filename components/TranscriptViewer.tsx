@@ -39,15 +39,20 @@ export function TranscriptViewer(props: {
     const onTimeUpdate = () => {
       const tMs = audio.currentTime * 1000;
 
-      // kleine linear scan; prima voor MVP
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (tMs >= seg.start_ms && tMs <= seg.end_ms) {
-          setActiveIndex(i);
-          return;
+      // Binary search on start_ms (segments are chronologically ordered)
+      let lo = 0, hi = segments.length - 1, found = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >>> 1;
+        if (segments[mid].end_ms < tMs) {
+          lo = mid + 1;
+        } else if (segments[mid].start_ms > tMs) {
+          hi = mid - 1;
+        } else {
+          found = mid;
+          break;
         }
       }
-      setActiveIndex(-1);
+      setActiveIndex(found);
     };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
