@@ -1,0 +1,14 @@
+{
+  "name": "HB∞ Transcribe Assistant",
+  "description": "Professionele audio transcriptie tool met sprekerherkenning, opschoning en samenvattingen.",
+  "requiredIfamePermissions": [
+    "microphone"
+  ],
+  "supabase": {
+    "url": "https://zrthqafuxwzhdylomczm.supabase.co",
+    "anonKey": "sb_publishable_teozgTZx7cMGshEH30sGwA_xjNsH24U"
+  },
+  "assemblyai": {
+    "apiKey": "f0329fd0687b4db280843c119428cdef"
+  }
+}
