@@ -482,30 +482,85 @@ export const generateView = async (
   }
 
   const task = withRetry(async () => {
-    const modelId = "gemini-3-flash-preview";
-    
+    const modelId = "gemini-2.0-flash";
+
     let prompt = "";
-    let systemInstruction = "Je bent een expert in het notuleren van vergaderingen. Nederlands.";
+    let systemInstruction = "";
 
     if (type === 'minutes') {
-      prompt = `Genereer uitgebreide notulen in Markdown op basis van deze transcriptie: ${fullTranscript}.
-      Gebruik EXACT dit format:
-      **Onderwerp**
-      - ...
-      **Kernpunten**
-      - ... (max 10)
-      **Besluiten**
-      - ... (als geen besluiten: "- Geen besluiten genoemd")
-      **Actiepunten**
-      - [ ] ... (eigenaar tussen haakjes als genoemd; anders "(eigenaar: TBD)") (max 6)
-      **Open vragen**
-      - ... (als leeg: "- Geen open vragen")`;
+      systemInstruction = `Je bent een professionele notulist die formele vergaderverslagen opstelt in zakelijk Nederlands.
+
+Je schrijft altijd in de derde persoon en attribueert uitspraken aan de juiste persoon als de naam bekend is uit de transcriptie ("Jan geeft aan dat...", "De voorzitter stelt voor...", "De groep besluit...").
+
+Je volgt ALTIJD exact het onderstaande format — niet meer, niet minder. Geen markdown-opmaak zoals ** of ##. Gewone tekst met nummers en bullets.`;
+
+      prompt = `Stel een volledig vergaderverslag op op basis van deze transcriptie.
+
+TRANSCRIPTIE:
+${fullTranscript}
+
+VERPLICHT FORMAT (volg dit exact):
+
+Verslag vergadering [naam van de vergadering of onderwerp]
+[Dag] [datum], [starttijd] – [eindtijd]
+Locatie: [locatie, of weglaten als onbekend]
+
+Aanwezig: [namen gescheiden door komma's, of "Onbekend" als niet vermeld]
+Afgemeld: [namen, of deze regel weglaten als niemand afgemeld]
+
+VERSLAG, ACTIE- EN BESLUITENLIJST:
+
+[Nummer elk agendapunt dat besproken is. Gebruik bullets (•) voor inhoud. Sluit elk punt met besluiten af als die genomen zijn.]
+
+1. [Naam agendapunt]
+• [Besproken punt]
+• [Besproken punt, met naam als duidelijk wie het zei]
+
+Besluiten:
+  ➢ [Besluit 1]
+  ➢ [Besluit 2]
+
+2. [Naam agendapunt]
+• [Besproken punt]
+
+[Geen besluiten = geen "Besluiten:" blok voor dit punt]
+
+[Ga door voor alle besproken agendapunten]
+
+REGELS:
+- Gebruik GEEN markdown (geen **, geen ##, geen ---)
+- Noem namen als duidelijk is wie iets zei
+- Besluiten altijd onder "Besluiten:" met ➢
+- Actiepunten zijn ook besluiten: benoem wie de actie oppakt
+- Als een agendapunt geen inhoud had: één korte zin volstaat
+- Sluit af met datum/tijd van afsluiting als die bekend is`;
+
     } else if (type === 'actionPoints') {
-      prompt = `Extraheer alleen de actiepunten als een checklist uit deze transcriptie: ${fullTranscript}.
-      Format:
-      - [ ] Actiepunt (eigenaar)`;
+      systemInstruction = "Je bent een nauwkeurige notulist. Extraheer actiepunten in zakelijk Nederlands.";
+      prompt = `Extraheer alle actiepunten en besluiten met een eigenaar uit deze transcriptie als een genummerde checklist.
+
+TRANSCRIPTIE:
+${fullTranscript}
+
+FORMAT:
+Actiepunten & besluiten:
+
+1. [ ] [Actiepunt] — [Eigenaar of "TBD"]
+2. [ ] [Actiepunt] — [Eigenaar of "TBD"]
+
+Neem alleen concrete acties en besluiten op, geen discussiepunten.`;
+
     } else if (type === 'shortSummary') {
-      prompt = `Geef een zeer korte samenvatting (3-5 bullets) van de belangrijkste punten uit deze transcriptie: ${fullTranscript}.`;
+      systemInstruction = "Je bent een bondige samenvatten in zakelijk Nederlands.";
+      prompt = `Geef een korte samenvatting van deze vergadering in maximaal 5 bullets. Noem alleen de belangrijkste besproken onderwerpen en genomen besluiten.
+
+TRANSCRIPTIE:
+${fullTranscript}
+
+FORMAT:
+• [Punt 1]
+• [Punt 2]
+• [Punt 3]`;
     }
 
     const response = await ai.models.generateContent({
@@ -513,10 +568,10 @@ export const generateView = async (
       contents: prompt,
       config: {
         systemInstruction,
-        // SEPARATE SETTINGS FOR ANALYSIS/SUMMARY (NON-TRANSCRIPTION)
         temperature: 0.1,
         topP: 0.95,
         topK: 64,
+        maxOutputTokens: 8192,
       },
     });
 
