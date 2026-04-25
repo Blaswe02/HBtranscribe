@@ -40,7 +40,7 @@ export async function generateInsightsFromTranscript(input: {
     );
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1beta' } });
 
   const language = input.language ?? "nl";
 
