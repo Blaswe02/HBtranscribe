@@ -14,6 +14,7 @@ dist-ssr
 
 # Local config with API keys — do NOT commit
 metadata.json
+.env
 
 # Editor directories and files
 .vscode/*
