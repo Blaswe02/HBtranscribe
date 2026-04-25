@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Schema, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TranscriptionResult, TranscriptionMode, TranscriptionLanguage } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -11,11 +11,21 @@ export interface TranscriptionOptions {
   showSpeakerLabels: boolean;
 }
 
+const MAX_CACHE_SIZE = 50;
+
 // Simple cache for deduplication
 let requestCache = new Map<string, Promise<TranscriptionResult>>();
 
 export const clearCache = () => {
   requestCache.clear();
+};
+
+const addToCache = (key: string, value: Promise<TranscriptionResult>) => {
+  if (requestCache.size >= MAX_CACHE_SIZE) {
+    // Evict oldest entry
+    requestCache.delete(requestCache.keys().next().value!);
+  }
+  requestCache.set(key, value);
 };
 
 const TRANSCRIPTION_SCHEMA: Schema = {
@@ -164,8 +174,8 @@ export const transcribeAudio = async (
   if (requestCache.has(hash)) return requestCache.get(hash)!;
 
   const task = withRetry(async () => {
-    const modelId = "gemini-3-flash-preview";
-    
+    const modelId = "gemini-2.0-flash";
+
     const langMap = {
       [TranscriptionLanguage.DUTCH]: "Nederlands",
       [TranscriptionLanguage.ENGLISH]: "Engels",
@@ -322,7 +332,6 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
     };
 
     const isTranscriptionMode = input.options.mode === TranscriptionMode.VERBATIM || input.options.mode === TranscriptionMode.READABLE;
-    const isFlash25 = modelId.includes("gemini-2.5-flash");
 
     const response = await ai.models.generateContent({
       model: modelId,
@@ -331,19 +340,16 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: TRANSCRIPTION_SCHEMA,
-        // TECHNICAL SETTINGS FOR TRANSCRIPTION
-        temperature: isTranscriptionMode ? 0 : 0.1, 
+        temperature: isTranscriptionMode ? 0 : 0.1,
         topP: isTranscriptionMode ? 0.1 : 0.95,
         topK: isTranscriptionMode ? 1 : 64,
-        maxOutputTokens: 16384, // Increased to avoid token limit errors
-        // Thinking budget 0 for Gemini 2.5 Flash in transcription mode
-        ...(isFlash25 && isTranscriptionMode ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {})
+        maxOutputTokens: 16384,
       },
     });
 
     const text = response.text;
     if (!text) throw new Error("Geen antwoord ontvangen van Gemini.");
-    
+
     let result: TranscriptionResult;
     try {
       result = JSON.parse(cleanJsonString(text)) as TranscriptionResult;
@@ -351,12 +357,10 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
       console.error("JSON Parse Error. Raw text snippet:", text.slice(0, 300) + " ... " + text.slice(-300));
       throw new Error("AI gaf geen valide JSON terug");
     }
-    
-    // Add debug info
+
     result.debugInfo = {
       modelName: modelId,
       temperature: isTranscriptionMode ? 0 : 0.1,
-      thinkingLevel: isFlash25 && isTranscriptionMode ? "LOW (0 budget)" : undefined,
       chunksCount: input.totalChunks || 1,
       isStructuredOutput: true,
       needsFollowup: result.needs_followup
@@ -368,7 +372,7 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
     throw new Error(mapError(err));
   });
 
-  requestCache.set(hash, task);
+  addToCache(hash, task);
   return task;
 };
 
@@ -380,7 +384,7 @@ export const mergeTranscriptions = async (
   if (chunks.length === 1) return chunks[0];
 
   return withRetry(async () => {
-    const modelId = "gemini-3-flash-preview";
+    const modelId = "gemini-2.0-flash";
     const combinedTranscript = chunks.map((c, i) => `[Fragment ${i+1}]\n${c.transcript}`).join("\n\n");
 
     const langMap = {
@@ -400,7 +404,6 @@ export const mergeTranscriptions = async (
     `;
 
     const isTranscriptionMode = options.mode === TranscriptionMode.VERBATIM || options.mode === TranscriptionMode.READABLE;
-    const isFlash25 = modelId.includes("gemini-2.5-flash");
 
     const response = await ai.models.generateContent({
       model: modelId,
@@ -443,11 +446,9 @@ Het resultaat moet één schone, volledige transcriptie zijn.`,
       throw new Error("AI gaf geen valide JSON terug");
     }
     
-    // Add debug info for the merged result
     result.debugInfo = {
       modelName: modelId,
       temperature: isTranscriptionMode ? 0 : 0.1,
-      thinkingLevel: isFlash25 && isTranscriptionMode ? "LOW (0 budget)" : undefined,
       chunksCount: chunks.length,
       isStructuredOutput: true,
       needsFollowup: result.needs_followup
@@ -472,30 +473,85 @@ export const generateView = async (
   }
 
   const task = withRetry(async () => {
-    const modelId = "gemini-3-flash-preview";
-    
+    const modelId = "gemini-2.0-flash";
+
     let prompt = "";
-    let systemInstruction = "Je bent een expert in het notuleren van vergaderingen. Nederlands.";
+    let systemInstruction = "";
 
     if (type === 'minutes') {
-      prompt = `Genereer uitgebreide notulen in Markdown op basis van deze transcriptie: ${fullTranscript}.
-      Gebruik EXACT dit format:
-      **Onderwerp**
-      - ...
-      **Kernpunten**
-      - ... (max 10)
-      **Besluiten**
-      - ... (als geen besluiten: "- Geen besluiten genoemd")
-      **Actiepunten**
-      - [ ] ... (eigenaar tussen haakjes als genoemd; anders "(eigenaar: TBD)") (max 6)
-      **Open vragen**
-      - ... (als leeg: "- Geen open vragen")`;
+      systemInstruction = `Je bent een professionele notulist die formele vergaderverslagen opstelt in zakelijk Nederlands.
+
+Je schrijft altijd in de derde persoon en attribueert uitspraken aan de juiste persoon als de naam bekend is uit de transcriptie ("Jan geeft aan dat...", "De voorzitter stelt voor...", "De groep besluit...").
+
+Je volgt ALTIJD exact het onderstaande format — niet meer, niet minder. Geen markdown-opmaak zoals ** of ##. Gewone tekst met nummers en bullets.`;
+
+      prompt = `Stel een volledig vergaderverslag op op basis van deze transcriptie.
+
+TRANSCRIPTIE:
+${fullTranscript}
+
+VERPLICHT FORMAT (volg dit exact):
+
+Verslag vergadering [naam van de vergadering of onderwerp]
+[Dag] [datum], [starttijd] – [eindtijd]
+Locatie: [locatie, of weglaten als onbekend]
+
+Aanwezig: [namen gescheiden door komma's, of "Onbekend" als niet vermeld]
+Afgemeld: [namen, of deze regel weglaten als niemand afgemeld]
+
+VERSLAG, ACTIE- EN BESLUITENLIJST:
+
+[Nummer elk agendapunt dat besproken is. Gebruik bullets (•) voor inhoud. Sluit elk punt met besluiten af als die genomen zijn.]
+
+1. [Naam agendapunt]
+• [Besproken punt]
+• [Besproken punt, met naam als duidelijk wie het zei]
+
+Besluiten:
+  ➢ [Besluit 1]
+  ➢ [Besluit 2]
+
+2. [Naam agendapunt]
+• [Besproken punt]
+
+[Geen besluiten = geen "Besluiten:" blok voor dit punt]
+
+[Ga door voor alle besproken agendapunten]
+
+REGELS:
+- Gebruik GEEN markdown (geen **, geen ##, geen ---)
+- Noem namen als duidelijk is wie iets zei
+- Besluiten altijd onder "Besluiten:" met ➢
+- Actiepunten zijn ook besluiten: benoem wie de actie oppakt
+- Als een agendapunt geen inhoud had: één korte zin volstaat
+- Sluit af met datum/tijd van afsluiting als die bekend is`;
+
     } else if (type === 'actionPoints') {
-      prompt = `Extraheer alleen de actiepunten als een checklist uit deze transcriptie: ${fullTranscript}.
-      Format:
-      - [ ] Actiepunt (eigenaar)`;
+      systemInstruction = "Je bent een nauwkeurige notulist. Extraheer actiepunten in zakelijk Nederlands.";
+      prompt = `Extraheer alle actiepunten en besluiten met een eigenaar uit deze transcriptie als een genummerde checklist.
+
+TRANSCRIPTIE:
+${fullTranscript}
+
+FORMAT:
+Actiepunten & besluiten:
+
+1. [ ] [Actiepunt] — [Eigenaar of "TBD"]
+2. [ ] [Actiepunt] — [Eigenaar of "TBD"]
+
+Neem alleen concrete acties en besluiten op, geen discussiepunten.`;
+
     } else if (type === 'shortSummary') {
-      prompt = `Geef een zeer korte samenvatting (3-5 bullets) van de belangrijkste punten uit deze transcriptie: ${fullTranscript}.`;
+      systemInstruction = "Je bent een bondige samenvatten in zakelijk Nederlands.";
+      prompt = `Geef een korte samenvatting van deze vergadering in maximaal 5 bullets. Noem alleen de belangrijkste besproken onderwerpen en genomen besluiten.
+
+TRANSCRIPTIE:
+${fullTranscript}
+
+FORMAT:
+• [Punt 1]
+• [Punt 2]
+• [Punt 3]`;
     }
 
     const response = await ai.models.generateContent({
@@ -503,10 +559,10 @@ export const generateView = async (
       contents: prompt,
       config: {
         systemInstruction,
-        // SEPARATE SETTINGS FOR ANALYSIS/SUMMARY (NON-TRANSCRIPTION)
         temperature: 0.1,
         topP: 0.95,
         topK: 64,
+        maxOutputTokens: 8192,
       },
     });
 
@@ -515,6 +571,6 @@ export const generateView = async (
   }, 2, signal, onRetry);
 
   // Store in cache as a pseudo-TranscriptionResult for compatibility with the existing cache map
-  requestCache.set(cacheKey, task.then(text => ({ [type]: text } as any)));
+  addToCache(cacheKey, task.then(text => ({ [type]: text } as any)));
   return task;
 };

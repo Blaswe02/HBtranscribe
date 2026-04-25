@@ -151,7 +151,6 @@ try {
 } finally {
   setInsightsLoading(false);
 }
-}
 
   setShowUploadDebug(true);
   setStatus(ProcessingStatus.COMPLETED);
@@ -175,7 +174,7 @@ try {
         // Ensure debug info for live session
         if (finalResult && !finalResult.debugInfo) {
           finalResult.debugInfo = {
-            modelName: "gemini-3-flash-preview",
+            modelName: "gemini-2.0-flash",
             temperature: (options.mode === TranscriptionMode.VERBATIM || options.mode === TranscriptionMode.READABLE) ? 0 : 0.1,
             chunksCount: 1,
             isStructuredOutput: true,
@@ -424,22 +423,47 @@ try {
             
             {/* Mode Selector */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-sm text-left">
+
+              {/* Kwaliteits selector */}
+              <div className="mb-6">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Verwerkingskwaliteit</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setUploadOnly(true)}
+                    className={`flex flex-col items-start p-4 rounded-xl border-2 transition-all text-left ${
+                      uploadOnly
+                        ? 'border-amber-400 bg-amber-50 ring-4 ring-amber-100/50 shadow-sm'
+                        : 'border-slate-100 hover:border-slate-300 bg-slate-50/50 hover:bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Zap className={`w-4 h-4 ${uploadOnly ? 'text-amber-500' : 'text-slate-400'}`} />
+                      <span className={`font-bold text-sm ${uploadOnly ? 'text-amber-700' : 'text-slate-600'}`}>Hoge kwaliteit</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 leading-relaxed">AssemblyAI · Beste sprekerherkenning · ~€0,38/uur</span>
+                  </button>
+                  <button
+                    onClick={() => setUploadOnly(false)}
+                    className={`flex flex-col items-start p-4 rounded-xl border-2 transition-all text-left ${
+                      !uploadOnly
+                        ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100/50 shadow-sm'
+                        : 'border-slate-100 hover:border-slate-300 bg-slate-50/50 hover:bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className={`w-4 h-4 ${!uploadOnly ? 'text-blue-500' : 'text-slate-400'}`} />
+                      <span className={`font-bold text-sm ${!uploadOnly ? 'text-blue-700' : 'text-slate-600'}`}>Standaard</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 leading-relaxed">Gemini · Goede kwaliteit · ~€0,03/uur</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-col md:flex-row gap-8">
                 {/* Modes */}
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Transcriptie Modus</label>
-                    <button 
-                      onClick={() => setUploadOnly(!uploadOnly)}
-                      className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        uploadOnly 
-                          ? 'bg-amber-100 text-amber-700 border border-amber-200' 
-                          : 'bg-slate-100 text-slate-500 border border-slate-200'
-                      }`}
-                    >
-                      <Upload className="w-3 h-3" />
-                      Upload Only: {uploadOnly ? 'ON' : 'OFF'}
-                    </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[

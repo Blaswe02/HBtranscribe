@@ -68,12 +68,10 @@ Keep it concise and useful.`;
     },
   };
 
-  console.log("GEMINI_INSIGHTS_START");
-
   const res = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: system }, { text: JSON.stringify(payload) }] }],
-    generationConfig: { temperature: 0.2 },
+    config: { temperature: 0.2 },
   });
 
   const text = (res.text ?? "").trim();
@@ -83,7 +81,6 @@ Keep it concise and useful.`;
 
   try {
     const parsed = JSON.parse(jsonStr);
-    console.log("GEMINI_INSIGHTS_DONE");
     return parsed as InsightResult;
   } catch {
     console.error("GEMINI_INSIGHTS_PARSE_FAIL", text.slice(0, 400));
