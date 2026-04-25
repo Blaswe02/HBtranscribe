@@ -175,7 +175,7 @@ try {
         // Ensure debug info for live session
         if (finalResult && !finalResult.debugInfo) {
           finalResult.debugInfo = {
-            modelName: "gemini-3-flash-preview",
+            modelName: "gemini-2.0-flash",
             temperature: (options.mode === TranscriptionMode.VERBATIM || options.mode === TranscriptionMode.READABLE) ? 0 : 0.1,
             chunksCount: 1,
             isStructuredOutput: true,

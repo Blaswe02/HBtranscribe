@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Schema, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TranscriptionResult, TranscriptionMode, TranscriptionLanguage } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -332,7 +332,6 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
     };
 
     const isTranscriptionMode = input.options.mode === TranscriptionMode.VERBATIM || input.options.mode === TranscriptionMode.READABLE;
-    const isFlash25 = modelId.includes("gemini-2.5-flash");
 
     const response = await ai.models.generateContent({
       model: modelId,
@@ -341,19 +340,16 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: TRANSCRIPTION_SCHEMA,
-        // TECHNICAL SETTINGS FOR TRANSCRIPTION
-        temperature: isTranscriptionMode ? 0 : 0.1, 
+        temperature: isTranscriptionMode ? 0 : 0.1,
         topP: isTranscriptionMode ? 0.1 : 0.95,
         topK: isTranscriptionMode ? 1 : 64,
-        maxOutputTokens: 16384, // Increased to avoid token limit errors
-        // Thinking budget 0 for Gemini 2.5 Flash in transcription mode
-        ...(isFlash25 && isTranscriptionMode ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {})
+        maxOutputTokens: 16384,
       },
     });
 
     const text = response.text;
     if (!text) throw new Error("Geen antwoord ontvangen van Gemini.");
-    
+
     let result: TranscriptionResult;
     try {
       result = JSON.parse(cleanJsonString(text)) as TranscriptionResult;
@@ -361,12 +357,10 @@ Dit fragment moet zo volledig mogelijk worden uitgeschreven, ook als zinnen onaf
       console.error("JSON Parse Error. Raw text snippet:", text.slice(0, 300) + " ... " + text.slice(-300));
       throw new Error("AI gaf geen valide JSON terug");
     }
-    
-    // Add debug info
+
     result.debugInfo = {
       modelName: modelId,
       temperature: isTranscriptionMode ? 0 : 0.1,
-      thinkingLevel: isFlash25 && isTranscriptionMode ? "LOW (0 budget)" : undefined,
       chunksCount: input.totalChunks || 1,
       isStructuredOutput: true,
       needsFollowup: result.needs_followup
@@ -410,7 +404,6 @@ export const mergeTranscriptions = async (
     `;
 
     const isTranscriptionMode = options.mode === TranscriptionMode.VERBATIM || options.mode === TranscriptionMode.READABLE;
-    const isFlash25 = modelId.includes("gemini-2.5-flash");
 
     const response = await ai.models.generateContent({
       model: modelId,
@@ -453,11 +446,9 @@ Het resultaat moet één schone, volledige transcriptie zijn.`,
       throw new Error("AI gaf geen valide JSON terug");
     }
     
-    // Add debug info for the merged result
     result.debugInfo = {
       modelName: modelId,
       temperature: isTranscriptionMode ? 0 : 0.1,
-      thinkingLevel: isFlash25 && isTranscriptionMode ? "LOW (0 budget)" : undefined,
       chunksCount: chunks.length,
       isStructuredOutput: true,
       needsFollowup: result.needs_followup
