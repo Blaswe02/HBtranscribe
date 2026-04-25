@@ -151,7 +151,6 @@ try {
 } finally {
   setInsightsLoading(false);
 }
-}
 
   setShowUploadDebug(true);
   setStatus(ProcessingStatus.COMPLETED);
