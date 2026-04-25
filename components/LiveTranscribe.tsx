@@ -269,9 +269,11 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
               if (!sessionAliveRef.current || !sessionRef.current) return;
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createBlob(inputData);
-              sessionRef.current.sendRealtimeInput({ audio: pcmBlob }).catch(() => {
+              try {
+                sessionRef.current.sendRealtimeInput({ audio: pcmBlob });
+              } catch {
                 sessionAliveRef.current = false;
-              });
+              }
             };
 
             source.connect(processor);
