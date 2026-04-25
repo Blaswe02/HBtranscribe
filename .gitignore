@@ -16,6 +16,9 @@ dist-ssr
 metadata.json
 .env
 
+# Migrated prompt history (colons in filenames break Windows)
+migrated_prompt_history/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
