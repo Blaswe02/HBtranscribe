@@ -244,7 +244,7 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
     let audioCtx: AudioContext | null = null;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.API_KEY });
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
