@@ -205,6 +205,10 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
     }
   };
 
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sessionAliveRef = useRef(false);
+
   const startLiveSession = async (isRestoring = false) => {
     setError(null);
 
@@ -215,7 +219,7 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
         return;
       }
     }
-    
+
     if (!isRestoring) {
       setFinalSegments([]);
       setPartialText('');
@@ -225,43 +229,57 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
     } else {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY);
       if (saved) {
-        const { finalSegments: savedSegments, accumulatedText: savedText } = JSON.parse(saved);
-        setFinalSegments(savedSegments);
-        accumulatedTextRef.current = savedText;
+        try {
+          const { finalSegments: savedSegments, accumulatedText: savedText } = JSON.parse(saved);
+          setFinalSegments(savedSegments);
+          accumulatedTextRef.current = savedText;
+        } catch {}
         setPartialText('');
         bufferRef.current = '';
         setHasRestorableSession(false);
       }
     }
 
+    let stream: MediaStream | null = null;
+    let audioCtx: AudioContext | null = null;
+
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       audioContextRef.current = audioCtx;
 
-      // Start flush interval (150ms throttle)
-      flushIntervalRef.current = window.setInterval(flushBuffer, 150);
+      sessionAliveRef.current = false;
 
-      const sessionPromise = ai.live.connect({
+      const session = await ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
             setReconnectAttempt(0);
-            const source = audioCtx.createMediaStreamSource(stream);
+            sessionAliveRef.current = true;
+
+            if (!audioCtx) return;
+            const source = audioCtx.createMediaStreamSource(stream!);
             const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-            
+            processorRef.current = processor;
+
             processor.onaudioprocess = (e) => {
+              if (!sessionAliveRef.current || !sessionRef.current) return;
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createBlob(inputData);
-              sessionPromise.then(session => session.sendRealtimeInput({ audio: pcmBlob }));
+              sessionRef.current.sendRealtimeInput({ audio: pcmBlob }).catch(() => {
+                sessionAliveRef.current = false;
+              });
             };
 
             source.connect(processor);
             processor.connect(audioCtx.destination);
-            (window as any)._liveProcessor = processor; 
-            (window as any)._liveStream = stream;
+
+            // Start flush interval after session is open
+            if (flushIntervalRef.current) clearInterval(flushIntervalRef.current);
+            flushIntervalRef.current = window.setInterval(flushBuffer, 150);
           },
           onmessage: async (message: LiveServerMessage) => {
             if (message.serverContent?.inputTranscription) {
@@ -272,7 +290,8 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
           },
           onerror: (e) => {
             if (import.meta.env.DEV) console.error("Live API Error:", e);
-            
+            sessionAliveRef.current = false;
+
             if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
               const backoff = Math.pow(2, reconnectAttempt) * 1000;
               setError(`Verbinding verbroken. Opnieuw verbinden in ${backoff/1000}s...`);
@@ -293,39 +312,60 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
         },
       });
 
-      sessionRef.current = await sessionPromise;
+      sessionRef.current = session;
       setIsActive(true);
 
     } catch (err) {
       if (import.meta.env.DEV) console.error("Failed to start live session:", err);
+      // Clean up resources on failure
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (audioCtx) audioCtx.close();
+      mediaStreamRef.current = null;
+      audioContextRef.current = null;
       setError("Kon microfoon niet activeren of verbinden met de server.");
     }
   };
 
   const stopLiveSession = useCallback(() => {
+    // Stop sending audio first
+    sessionAliveRef.current = false;
+
     if (flushIntervalRef.current) {
       clearInterval(flushIntervalRef.current);
       flushIntervalRef.current = null;
     }
-    
-    // Final manual flush
-    const finalBuffer = bufferRef.current;
-    if (finalBuffer) {
-      setFinalSegments(prev => [...prev, finalBuffer]);
-      setPartialText('');
+
+    // Disconnect processor before closing session
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
     }
 
+    // Stop media stream tracks
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+
+    // Close session after audio is stopped
     if (sessionRef.current) {
-      sessionRef.current.close();
+      try { sessionRef.current.close(); } catch {}
       sessionRef.current = null;
     }
+
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
-    const stream = (window as any)._liveStream as MediaStream;
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    
+
+    // Final flush of remaining buffer
+    const finalBuffer = bufferRef.current;
+    if (finalBuffer) {
+      setFinalSegments(prev => [...prev, finalBuffer]);
+      bufferRef.current = '';
+      setPartialText('');
+    }
+
     setIsActive(false);
     localStorage.removeItem(SESSION_STORAGE_KEY);
     if (accumulatedTextRef.current.trim()) {
@@ -336,8 +376,11 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
   // Ensure cleanup on unmount
   useEffect(() => {
     return () => {
+      sessionAliveRef.current = false;
       if (flushIntervalRef.current) clearInterval(flushIntervalRef.current);
-      if (sessionRef.current) sessionRef.current.close();
+      if (processorRef.current) { try { processorRef.current.disconnect(); } catch {} }
+      if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      if (sessionRef.current) { try { sessionRef.current.close(); } catch {} }
       if (audioContextRef.current) audioContextRef.current.close();
     };
   }, []);

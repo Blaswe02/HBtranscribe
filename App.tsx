@@ -213,28 +213,26 @@ try {
           
           // NEW TIME-BASED CHUNKING LOGIC
           const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const arrayBuffer = await blob.arrayBuffer();
-          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-          
-          const totalSamples = audioBuffer.length;
-          const sampleRate = audioBuffer.sampleRate;
-          const samplesPerChunk = MAX_DURATION * sampleRate;
-          const totalChunks = Math.ceil(totalSamples / samplesPerChunk);
-          
-          // Overlap in samples (e.g., 5 seconds)
-          const overlapSamples = 5 * sampleRate;
+          let chunks: Blob[] = [];
+          try {
+            const arrayBuffer = await blob.arrayBuffer();
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-          const chunks: Blob[] = [];
-          for (let i = 0; i < totalChunks; i++) {
-            const start = Math.max(0, i * samplesPerChunk - (i > 0 ? overlapSamples : 0));
-            const end = Math.min(totalSamples, (i + 1) * samplesPerChunk + (i < totalChunks - 1 ? overlapSamples : 0));
-            
-            const wavBlob = encodeWavFromAudioBufferSegment(audioBuffer, start, end);
-            chunks.push(wavBlob);
+            const totalSamples = audioBuffer.length;
+            const sampleRate = audioBuffer.sampleRate;
+            const samplesPerChunk = MAX_DURATION * sampleRate;
+            const totalChunks = Math.ceil(totalSamples / samplesPerChunk);
+            const overlapSamples = 5 * sampleRate;
+
+            for (let i = 0; i < totalChunks; i++) {
+              const start = Math.max(0, i * samplesPerChunk - (i > 0 ? overlapSamples : 0));
+              const end = Math.min(totalSamples, (i + 1) * samplesPerChunk + (i < totalChunks - 1 ? overlapSamples : 0));
+              chunks.push(encodeWavFromAudioBufferSegment(audioBuffer, start, end));
+            }
+          } finally {
+            await audioCtx.close();
           }
-          
-          // Close context to free resources
-          await audioCtx.close();
+          const totalChunks = chunks.length;
 
           setProgress({ current: 0, total: totalChunks, percentage: 0 });
           setStatus(ProcessingStatus.TRANSCRIBING);
@@ -278,9 +276,10 @@ try {
                           isOverloaded: true
                         }));
 
-                        // Countdown for UI
+                        // Countdown for UI — cleared when aborted
                         let remaining = Math.ceil(delay / 1000);
                         const timer = setInterval(() => {
+                          if (abortController.signal.aborted) { clearInterval(timer); return; }
                           remaining--;
                           setProgress(prev => ({ ...prev, cooldownSeconds: Math.max(0, remaining) }));
                           if (remaining <= 0) clearInterval(timer);

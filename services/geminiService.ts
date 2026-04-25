@@ -170,7 +170,11 @@ export const transcribeAudio = async (
   onRetry?: (attempt: number, delay: number) => void
 ): Promise<TranscriptionResult> => {
   // Deduplication hash (simple version)
-  const hash = input.text || (input.blob ? `${input.blob.size}-${input.blob.type}-${input.chunkNumber}-${input.options.mode}-${input.options.language}-${input.options.showTimestamps}-${input.options.showSpeakerLabels}` : 'empty');
+  const hash = input.text
+    ? `text-${input.options.mode}-${input.options.language}-${input.text.slice(0, 100)}`
+    : input.blob
+    ? `blob-${input.blob.size}-${input.blob.type}-${input.chunkNumber ?? 0}-${input.totalChunks ?? 1}-${input.options.mode}-${input.options.language}-${input.options.showTimestamps}-${input.options.showSpeakerLabels}`
+    : 'empty';
   if (requestCache.has(hash)) return requestCache.get(hash)!;
 
   const task = withRetry(async () => {
@@ -431,7 +435,6 @@ Het resultaat moet één schone, volledige transcriptie zijn.`,
         topK: isTranscriptionMode ? 1 : 64,
         maxOutputTokens: 16384, // Increased to avoid token limit errors
         // Thinking budget 0 for Gemini 2.5 Flash in transcription mode
-        ...(isFlash25 && isTranscriptionMode ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {})
       },
     });
 
