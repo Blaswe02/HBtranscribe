@@ -137,6 +137,27 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
     setShowDownloadMenu(false);
   };
 
+  const exportAsWord = () => {
+    const text = (result as any)[activeTab] || "";
+    const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const htmlLines = text.split('\n').map((line: string) => {
+      if (!line.trim()) return '<p>&nbsp;</p>';
+      if (/^\d+\./.test(line.trim())) return `<p><b>${escapeHtml(line)}</b></p>`;
+      if (line.trim().startsWith('Besluiten:') || line.trim().startsWith('Actiepunten:')) return `<p><b>${escapeHtml(line)}</b></p>`;
+      if (line.trim().startsWith('•') || line.trim().startsWith('➢')) return `<p style="margin-left:24pt">${escapeHtml(line)}</p>`;
+      return `<p>${escapeHtml(line)}</p>`;
+    }).join('');
+    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt}p{margin:4pt 0}</style></head><body>${htmlLines}</body></html>`;
+    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `notulen-${new Date().toISOString().split('T')[0]}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowDownloadMenu(false);
+  };
+
   const exportAsJson = () => {
     const content = JSON.stringify({
       metadata: {
@@ -338,6 +359,10 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
             {showDownloadMenu && (
               <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-20 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Huidige weergave</div>
+                <button onClick={exportAsWord} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 transition-colors">
+                  <FileText className="w-4 h-4 text-blue-500" />
+                  <span className="font-medium text-blue-700">Word (.doc)</span>
+                </button>
                 <button onClick={exportAsTxt} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
                   <FileText className="w-4 h-4 text-slate-400" />
                   <span>Tekst (.txt)</span>
