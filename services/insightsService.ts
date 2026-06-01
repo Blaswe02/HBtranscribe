@@ -63,7 +63,7 @@ Keep it concise and useful.`;
   };
 
   const res = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: system }, { text: JSON.stringify(payload) }] }],
     config: { temperature: 0.2 },
   });
