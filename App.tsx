@@ -438,7 +438,8 @@ try {
             {/* Mode Selector */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-sm text-left">
 
-              {/* Kwaliteits selector */}
+              {/* Kwaliteits selector — verborgen bij Plak transcript */}
+              {inputMode !== 'paste' && (
               <div className="mb-6">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Verwerkingskwaliteit</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -472,6 +473,7 @@ try {
                   </button>
                 </div>
               </div>
+              )}
 
               <div className="flex flex-col md:flex-row gap-8">
                 {/* Modes */}
