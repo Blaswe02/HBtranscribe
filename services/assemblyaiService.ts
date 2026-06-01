@@ -1,15 +1,11 @@
-import meta from "../metadata.json";
-
 const ASSEMBLYAI_API_URL = "https://api.assemblyai.com/v2";
 
 type AnyEnv = Record<string, any>;
 const env: AnyEnv = (import.meta as any).env || {};
 
-// Key resolution (env first, then metadata)
 const API_KEY: string | undefined =
   env.VITE_ASSEMBLYAI_API_KEY ||
-  env.ASSEMBLYAI_API_KEY ||
-  (meta as any)?.assemblyai?.apiKey;
+  env.ASSEMBLYAI_API_KEY;
 
 export type Segment = {
   start_ms: number;
@@ -85,7 +81,7 @@ export async function transcribeWithAssemblyAI(
 ): Promise<AsrResult> {
   if (!API_KEY) {
     throw new Error(
-      "AssemblyAI API key ontbreekt. Zet VITE_ASSEMBLYAI_API_KEY (of ASSEMBLYAI_API_KEY) of voeg metadata.json → assemblyai.apiKey toe."
+      "AssemblyAI API key ontbreekt. Stel VITE_ASSEMBLYAI_API_KEY in als Vercel environment variable."
     );
   }
 

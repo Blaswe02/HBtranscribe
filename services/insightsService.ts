@@ -1,15 +1,9 @@
-import meta from "../metadata.json";
 import { GoogleGenAI } from "@google/genai";
 
 const env: Record<string, any> = (import.meta as any).env || {};
 
 function getGeminiKey(): string | undefined {
-  return (
-    env.VITE_GEMINI_API_KEY ||
-    env.GEMINI_API_KEY ||
-    (meta as any)?.gemini?.apiKey ||
-    (meta as any)?.GEMINI_API_KEY
-  );
+  return env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || process.env.API_KEY;
 }
 
 export type InsightResult = {
@@ -36,7 +30,7 @@ export async function generateInsightsFromTranscript(input: {
   const apiKey = getGeminiKey();
   if (!apiKey) {
     throw new Error(
-      "Gemini API key ontbreekt. Zet VITE_GEMINI_API_KEY (AI Studio env) of metadata.json → gemini.apiKey."
+      "Gemini API key ontbreekt. Stel GEMINI_API_KEY in als Vercel environment variable."
     );
   }
 
