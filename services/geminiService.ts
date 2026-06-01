@@ -468,9 +468,10 @@ export const generateView = async (
   type: 'minutes' | 'actionPoints' | 'shortSummary',
   fullTranscript: string,
   signal?: AbortSignal,
-  onRetry?: (attempt: number, delay: number) => void
+  onRetry?: (attempt: number, delay: number) => void,
+  templateType?: 'standard' | 'sto-ijzk'
 ): Promise<string> => {
-  const cacheKey = `view-${type}-${fullTranscript.length}-${fullTranscript.substring(0, 50)}`;
+  const cacheKey = `view-${type}-${templateType ?? 'standard'}-${fullTranscript.length}-${fullTranscript.substring(0, 50)}`;
   if (requestCache.has(cacheKey)) {
     const cached = await requestCache.get(cacheKey);
     return (cached as any)[type] || "";
@@ -482,7 +483,118 @@ export const generateView = async (
     let prompt = "";
     let systemInstruction = "";
 
-    if (type === 'minutes') {
+    if (type === 'minutes' && templateType === 'sto-ijzk') {
+      systemInstruction = `Je bent een professionele beleidsmedewerker die evaluatieverslagen opstelt voor STO IJZK in zakelijk Nederlands.
+
+Volg STRIKT de opgegeven structuur. Gebruik GEEN persoonsgegevens — alleen functienamen, schoolnamen en organisatienamen.
+Schrijf compact, feitelijk en beleidsmatig bruikbaar. Geen spreektaal, geen herhaling, geen irrelevante details.
+Benoem afwijkingen en onvoldoende onderbouwde uitspraken expliciet.
+Gebruik GEEN markdown (geen **, geen ##, geen ---). Gewone tekst met nummers.`;
+
+      prompt = `Verwerk onderstaande transcriptie van een evaluatiegesprek tot een professioneel evaluatieverslag voor STO IJZK.
+
+Het verslag moet bruikbaar zijn als input voor:
+- de DUS-I voortgangsrapportage periode 1 januari 2025 t/m 31 juli 2026;
+- het detailplan en de begroting 2027/2028;
+- regionale analyse en monitoring;
+- bestuurlijke besluitvorming binnen STO IJZK.
+
+BELANGRIJKE INSTRUCTIES:
+
+1. Volg de structuur en uitgangspunten van DUS-I
+Besteed expliciet aandacht aan: voortgang van activiteiten; behaalde doelen en mijlpalen; afwijkingen t.o.v. activiteitenplan; borging; samenwerking; doelmatigheid; inclusie/gender; duurzaamheid/technologie; technisch schoolpersoneel; samenwerking met bedrijven en mbo; deelbaarheid/opschaalbaarheid; regionale meerwaarde; effecten op leerlingen; profielkeuze en doorstroom; input voor 2027/2028.
+
+2. Gebruik GEEN persoonsgegevens
+Gebruik uitsluitend: functienamen; schoolnamen; organisatienamen; algemene omschrijvingen.
+NIET: "Jan Jansen gaf aan…" of "mevrouw De Vries organiseert…"
+WEL: "de techniekdocent gaf aan…" of "de school ervaart…" of "een projectleider benoemde…"
+
+3. Schrijf zakelijk, compact en beleidsmatig
+Geen letterlijk gespreksverslag, geen transcriptie, geen spreektaal, geen herhaling, geen irrelevante details.
+Focus op: analyse; opbrengsten; signalen; risico's; conclusies; aanbevelingen.
+
+4. Benoem afwijkingen expliciet
+Wanneer projecten anders zijn uitgevoerd, vertraagd zijn, onvoldoende effect hebben, onvoldoende onderbouwd zijn, of onvoldoende aansluiten op STO-doelen — benoem dit expliciet in een neutrale, zakelijke toon.
+
+5. Wees kritisch op onderbouwing
+Maak onderscheid tussen: harde cijfers/data; signalen/ervaringen; aannames/verwachtingen.
+
+GEBRUIK EXACT DEZE STRUCTUUR:
+
+Evaluatieverslag STO IJZK 2025/2026
+
+School
+[naam school, of "Onbekend" als niet vermeld]
+
+Datum gesprek
+[datum, of "Onbekend" als niet vermeld]
+
+1. Algemene indruk schooljaar 2025/2026
+[Beschrijf: algemene voortgang; betrokkenheid; algemene ontwikkeling; opvallende positieve punten; belangrijkste aandachtspunten.]
+
+2. Doelstellingen & voortgang
+[Beschrijf aan welke STO-doelstellingen bijgedragen is; zichtbare resultaten; trends/signalen; eventuele harde cijfers. Besteed aandacht aan: interesse techniek; deelname activiteiten; profielkeuze techniek; TL/bètaontwikkeling; doorstroom technisch mbo; bereik specifieke doelgroepen; effecten op leerlingen en docenten. Maak onderscheid tussen aantoonbare resultaten, signalen/ervaringen, en verwachtingen.]
+
+3. Uitvoering & afwijkingen
+[Beschrijf welke projecten/activiteiten zijn uitgevoerd; welke anders of niet zijn uitgevoerd; oorzaken van afwijkingen; wat goed werkte; wat minder goed werkte; risico's en kwetsbaarheden. Besteed aandacht aan: uitvoerbaarheid; borging; afhankelijkheid van specifieke personen; aansluiting op STO-doelen; toekomstbestendigheid.]
+
+4. Effect op leerlingen & onderwijs
+[Beschrijf: wat leerlingen hebben geleerd of ervaren; zichtbare effecten op interesse in techniek/technologie; signalen rond profielkeuze; signalen rond doorstroom mbo; effecten op onderwijsontwikkeling; effecten op docenten; structurele borging binnen de school. Benoem welke leerlinggroepen goed worden bereikt en welke minder goed.]
+
+5. STO-hoofdthema's
+
+Inclusie & gender
+[Beschrijf hoe aandacht is besteed aan inclusie en gender; in hoeverre dit concreet onderdeel is van projecten; verbeterpunten richting 2027/2028.]
+Score: Rood / Geel / Groen
+Toelichting: [korte toelichting]
+
+Duurzaamheid & technologie
+[Beschrijf hoe duurzaamheid en/of duurzame technologie onderdeel zijn van projecten; of dit wezenlijk is of ondersteunend/algemeen; verbeterpunten richting 2027/2028.]
+Score: Rood / Geel / Groen
+Toelichting: [korte toelichting]
+
+Technisch schoolpersoneel
+[Beschrijf hoe kennisdeling en professionalisering plaatsvinden; hoe techniek/technologie bij docenten wordt versterkt; eventuele risico's of aandachtspunten.]
+Score: Rood / Geel / Groen / Niet van toepassing
+Toelichting: [korte toelichting]
+
+6. Samenwerking & regionale meerwaarde
+[Beschrijf: samenwerking met technisch mbo; samenwerking met bedrijven; samenwerking met andere scholen; regionale samenwerking; cofinanciering; meerwaarde van samenwerkingen; deelbaarheid van projecten; opschaalbaarheid; regionale relevantie. Benoem expliciet welke projecten overdraagbaar zijn, welke sterk lokaal of persoonsafhankelijk zijn, en wat nodig is om projecten breder inzetbaar te maken.]
+
+7. SWITCH structuur & communicatie
+[Beschrijf: ervaringen met samenwerking binnen SWITCH IJZK; zichtbaarheid en ondersteuning projectleiders; communicatie; duidelijkheid van procedures en verwachtingen; regionale samenwerking; verbeterpunten; tips of aanbevelingen richting 2027/2028. Maak onderscheid tussen positieve ervaringen, knelpunten, en concrete verbetersuggesties.]
+
+8. Vooruitblik 2027/2028
+[Beschrijf: welke projecten moeten worden voortgezet; welke moeten worden aangepast; welke kunnen worden opgeschaald; welke onvoldoende effect hebben of moeten stoppen. Benoem welke projecten aantoonbare meerwaarde hebben, welke onvoldoende concreet/effectief zijn, en welke regionale keuzes of prioriteiten nodig zijn.]
+
+9. Samenvatting projectleider
+
+Grootste succes
+[korte beschrijving]
+
+Belangrijkste aandachtspunt
+[korte beschrijving]
+
+Belangrijkste actie richting 2027/2028
+[korte beschrijving]
+
+Advies projectleider
+[ ] Voortzetten
+[ ] Aanscherpen
+[ ] Opschalen
+[ ] Stoppen
+[ ] Nog onvoldoende onderbouwd
+
+Toelichting
+[korte toelichting op basis van het gesprek]
+
+EXTRA INSTRUCTIE
+Wanneer in het gesprek relevante uitspraken worden gedaan die afwijken van het activiteitenplan, risico's opleveren, onvoldoende aansluiten bij STO-doelen, onvoldoende concreet zijn uitgewerkt, of relevant zijn voor regionale keuzes richting 2027/2028 — dan moeten deze expliciet en helder benoemd worden in het verslag.
+
+TRANSCRIPTIE:
+${fullTranscript}`;
+
+    } else if (type === 'minutes') {
       systemInstruction = `Je bent een professionele notulist die formele vergaderverslagen opstelt in zakelijk Nederlands.
 
 Je schrijft altijd in de derde persoon en attribueert uitspraken aan de juiste persoon als de naam bekend is uit de transcriptie ("Jan geeft aan dat...", "De voorzitter stelt voor...", "De groep besluit...").

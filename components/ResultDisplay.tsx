@@ -9,16 +9,12 @@ interface ResultDisplayProps {
 }
 
 type ViewType = 'transcript' | 'minutes' | 'actionPoints' | 'shortSummary';
+type TemplateType = 'standard' | 'sto-ijzk';
 
 export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result: initialResult, mode }) => {
   const [result, setResult] = useState<TranscriptionResult>(initialResult);
-  
-  // Map mode to tab
-  const getInitialTab = (m: TranscriptionMode): ViewType => {
-    return 'transcript';
-  };
-
   const [activeTab, setActiveTab] = useState<ViewType>('transcript');
+  const [templateType, setTemplateType] = useState<TemplateType>('standard');
   const [copied, setCopied] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
@@ -31,6 +27,12 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
   useEffect(() => {
     setResult(initialResult);
   }, [initialResult]);
+
+  // When template type changes, clear cached minutes so it regenerates
+  useEffect(() => {
+    setResult(prev => ({ ...prev, minutes: undefined as any }));
+    setGenerationError(null);
+  }, [templateType]);
 
   // Lazy generation
   useEffect(() => {
@@ -46,7 +48,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
       setGenerationError(null);
       try {
         if (activeTab === 'minutes') {
-          const minutes = await generateView('minutes', result.transcript);
+          const minutes = await generateView('minutes', result.transcript, undefined, undefined, templateType);
           setResult(prev => ({ ...prev, minutes }));
         } else if (activeTab === 'actionPoints') {
           const actionPoints = await generateView('actionPoints', result.transcript);
@@ -63,7 +65,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
     };
 
     generateIfNeeded();
-  }, [activeTab, result.transcript, result.minutes, result.actionPoints, result.shortSummary]);
+  }, [activeTab, result.transcript, result.minutes, result.actionPoints, result.shortSummary, templateType]);
 
   // Close download menu on click outside
   useEffect(() => {
@@ -324,6 +326,33 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = React.memo(({ result:
             </span>
           )}
         </div>
+
+        {activeTab === 'minutes' && (
+          <div className="flex items-center gap-1 text-xs rounded-lg border border-slate-200 overflow-hidden">
+            <button
+              onClick={() => setTemplateType('standard')}
+              disabled={isGenerating}
+              className={`px-3 py-1.5 font-medium transition-colors ${
+                templateType === 'standard'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Vergadernotulen
+            </button>
+            <button
+              onClick={() => setTemplateType('sto-ijzk')}
+              disabled={isGenerating}
+              className={`px-3 py-1.5 font-medium transition-colors ${
+                templateType === 'sto-ijzk'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              STO IJZK
+            </button>
+          </div>
+        )}
         
         <div className="flex items-center gap-2">
           <button
