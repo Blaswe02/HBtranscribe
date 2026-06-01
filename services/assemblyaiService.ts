@@ -100,7 +100,7 @@ export async function transcribeWithAssemblyAI(
   // Per API error: must be non-empty list
   const speechModels = options.speechModels ?? ["universal-3-pro", "universal-2"];
 
-  console.log("ASSEMBLYAI_START", audioUrl);
+  if (import.meta.env.DEV) console.log("ASSEMBLYAI_START");
 
   // 1) Submit transcript job
   const submitRes = await fetch(`${ASSEMBLYAI_API_URL}/transcript`, {
@@ -138,8 +138,8 @@ export async function transcribeWithAssemblyAI(
 
   while (Date.now() - started < timeoutMs) {
     pollCount++;
-    if (pollCount === 1 || pollCount % 5 === 0) {
-      console.log("ASSEMBLYAI_POLL", transcriptId, `(#${pollCount})`);
+    if (import.meta.env.DEV && (pollCount === 1 || pollCount % 5 === 0)) {
+      console.log("ASSEMBLYAI_POLL", `#${pollCount}`);
     }
 
     const pollRes = await fetch(`${ASSEMBLYAI_API_URL}/transcript/${transcriptId}`, {
@@ -156,7 +156,7 @@ export async function transcribeWithAssemblyAI(
 
     const status = transcript?.status;
     if (status === "completed") {
-      console.log("ASSEMBLYAI_DONE", transcriptId);
+      if (import.meta.env.DEV) console.log("ASSEMBLYAI_DONE");
 
       const segments = mapUtterancesToSegments(transcript?.utterances ?? []);
       const fullText = String(transcript?.text ?? "");

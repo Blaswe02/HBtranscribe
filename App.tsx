@@ -59,6 +59,7 @@ const App: React.FC = () => {
 
       workerRef.current.onerror = (e) => {
         if (import.meta.env.DEV) console.warn("App Worker error:", e);
+        workerRef.current?.terminate();
         workerRef.current = null;
       };
     } catch (e) {
@@ -351,6 +352,19 @@ try {
     }
   }, [mode, language, showTimestamps, showSpeakerLabels, uploadOnly]);
 
+  const handlePasteSubmit = useCallback((text: string) => {
+    setError(null);
+    setCurrentFile({ name: 'Geplakt transcript', size: text.length, type: 'text/plain' });
+    setTranscription({
+      transcript: text,
+      mode: mode,
+      language: language,
+      continued_from: null,
+      needs_followup: false,
+    });
+    setStatus(ProcessingStatus.COMPLETED);
+  }, [mode, language]);
+
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -601,7 +615,7 @@ try {
                     className="w-full h-48 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                   <button
-                    onClick={() => pasteText.trim() && handleAudioProcessing(pasteText.trim())}
+                    onClick={() => pasteText.trim() && handlePasteSubmit(pasteText.trim())}
                     disabled={!pasteText.trim()}
                     className="mt-3 w-full py-2.5 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >

@@ -35,7 +35,7 @@ export async function uploadRecordingAndGetSignedUrl(
     throw new Error(`Supabase upload failed: ${uploadError.message}`);
   }
 
-  console.log("SIGNED_URL_FOR_PATH:", path);
+  if (import.meta.env.DEV) console.log("SIGNED_URL_FOR_PATH:", path);
 
 // Signed URL (voor private bucket)
   const { data, error: signedError } = await supabase.storage

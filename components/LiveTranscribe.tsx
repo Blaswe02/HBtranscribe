@@ -67,7 +67,8 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
       };
 
       workerRef.current.onerror = (e) => {
-        console.warn("Worker error, falling back to main thread:", e);
+        if (import.meta.env.DEV) console.warn("Worker error, falling back to main thread:", e);
+        workerRef.current?.terminate();
         workerRef.current = null;
       };
     } catch (e) {
@@ -208,8 +209,13 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sessionAliveRef = useRef(false);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const flushBufferRef = useRef(flushBuffer);
+
+  useEffect(() => { flushBufferRef.current = flushBuffer; }, [flushBuffer]);
 
   const startLiveSession = async (isRestoring = false) => {
+    if (isActive || sessionRef.current) return;
     setError(null);
 
     if (window.aistudio?.hasSelectedApiKey) {
@@ -281,7 +287,7 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
 
             // Start flush interval after session is open
             if (flushIntervalRef.current) clearInterval(flushIntervalRef.current);
-            flushIntervalRef.current = window.setInterval(flushBuffer, 150);
+            flushIntervalRef.current = window.setInterval(() => flushBufferRef.current(), 150);
           },
           onmessage: async (message: LiveServerMessage) => {
             if (message.serverContent?.inputTranscription) {
@@ -297,7 +303,9 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
             if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
               const backoff = Math.pow(2, reconnectAttempt) * 1000;
               setError(`Verbinding verbroken. Opnieuw verbinden in ${backoff/1000}s...`);
-              setTimeout(() => {
+              if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = window.setTimeout(() => {
+                reconnectTimeoutRef.current = null;
                 setReconnectAttempt(prev => prev + 1);
                 startLiveSession(true);
               }, backoff);
@@ -379,6 +387,7 @@ export const LiveTranscribe: React.FC<LiveTranscribeProps> = React.memo(({ onFin
   useEffect(() => {
     return () => {
       sessionAliveRef.current = false;
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (flushIntervalRef.current) clearInterval(flushIntervalRef.current);
       if (processorRef.current) { try { processorRef.current.disconnect(); } catch {} }
       if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(t => t.stop());
