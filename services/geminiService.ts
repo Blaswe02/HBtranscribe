@@ -179,7 +179,7 @@ export const transcribeAudio = async (
   if (requestCache.has(hash)) return requestCache.get(hash)!;
 
   const task = withRetry(async () => {
-    const modelId = "gemini-1.5-flash";
+    const modelId = "gemini-2.0-flash";
 
     const langMap = {
       [TranscriptionLanguage.DUTCH]: "Nederlands",
@@ -389,7 +389,7 @@ export const mergeTranscriptions = async (
   if (chunks.length === 1) return chunks[0];
 
   return withRetry(async () => {
-    const modelId = "gemini-1.5-flash";
+    const modelId = "gemini-2.0-flash";
     const combinedTranscript = chunks.map((c, i) => `[Fragment ${i+1}]\n${c.transcript}`).join("\n\n");
 
     const langMap = {
@@ -477,7 +477,7 @@ export const generateView = async (
   }
 
   const task = withRetry(async () => {
-    const modelId = "gemini-1.5-flash";
+    const modelId = "gemini-2.0-flash";
 
     let prompt = "";
     let systemInstruction = "";
