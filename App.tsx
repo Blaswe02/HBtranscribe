@@ -10,7 +10,7 @@ import { UploadDebugPanel } from './components/UploadDebugPanel';
 import { FileData, ProcessingStatus, TranscriptionResult, ProcessingProgress, TranscriptionMode, TranscriptionLanguage, DebugInfo } from './types';
 import { transcribeAudio, mergeTranscriptions, clearCache, TranscriptionOptions } from "./services/geminiService";
 import { encodeWavFromAudioBufferSegment } from './lib/audioUtils';
-import { Infinity, Mic, ChevronLeft, Upload, Disc, Radio, XCircle, ShieldCheck, Trash2, Zap, Clock, Users, Globe, Bug } from 'lucide-react';
+import { Infinity, Mic, ChevronLeft, Upload, Disc, Radio, XCircle, ShieldCheck, Trash2, Zap, Clock, Users, Globe, Bug, ClipboardPaste } from 'lucide-react';
 import { uploadRecordingAndGetSignedUrl } from "./services/storageService";
 import { transcribeWithAssemblyAI } from "./services/assemblyaiService";
 import { TranscriptViewer } from "./components/TranscriptViewer";
@@ -21,7 +21,8 @@ const App: React.FC = () => {
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
   const [currentFile, setCurrentFile] = useState<FileData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [inputMode, setInputMode] = useState<'upload' | 'record' | 'live'>('upload');
+  const [inputMode, setInputMode] = useState<'upload' | 'record' | 'live' | 'paste'>('upload');
+  const [pasteText, setPasteText] = useState('');
   const [progress, setProgress] = useState<ProcessingProgress>({ current: 0, total: 0, percentage: 0 });
   const [showDebug, setShowDebug] = useState(false);
   const [uploadOnly, setUploadOnly] = useState(true);
@@ -566,6 +567,15 @@ try {
                 <Radio className="w-4 h-4" />
                 Live Transcribe
               </button>
+              <button
+                onClick={() => setInputMode('paste')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  inputMode === 'paste' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <ClipboardPaste className="w-4 h-4" />
+                Plak transcript
+              </button>
             </div>
 
             <div className="transition-all duration-300 relative">
@@ -576,11 +586,29 @@ try {
                 <AudioRecorder onRecordingComplete={handleAudioProcessing} disabled={false} />
               </div>
               <div className={inputMode === 'live' ? 'block' : 'hidden'}>
-                <LiveTranscribe 
-                  onFinalize={handleAudioProcessing} 
-                  disabled={false} 
+                <LiveTranscribe
+                  onFinalize={handleAudioProcessing}
+                  disabled={false}
                   language={language}
                 />
+              </div>
+              <div className={inputMode === 'paste' ? 'block' : 'hidden'}>
+                <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-6 text-left">
+                  <label className="text-sm font-medium text-slate-700 mb-2 block">Plak hier je transcript</label>
+                  <textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    placeholder="Plak hier de tekst van je transcriptie (bijv. vanuit Whisper of een andere tool)..."
+                    className="w-full h-48 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <button
+                    onClick={() => pasteText.trim() && handleAudioProcessing(pasteText.trim())}
+                    disabled={!pasteText.trim()}
+                    className="mt-3 w-full py-2.5 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Maak notulen
+                  </button>
+                </div>
               </div>
             </div>
 
